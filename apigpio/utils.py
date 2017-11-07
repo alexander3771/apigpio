@@ -1,13 +1,16 @@
 import functools
+import logging
+
+logger = logging.getLogger('apigpio')
 
 
-def Debounce(threshold=100):
+def debounce(threshold=100):
     """
     Simple debouncing decorator for apigpio callbacks.
 
     Example:
 
-    `@Debouncer()
+    `@debouncer()
      def my_cb(gpio, level, tick)
          print('gpio cb: {} {} {}'.format(gpio, level, tick))
     `
@@ -22,7 +25,7 @@ def Debounce(threshold=100):
     threshold *= 1000
     max_tick = 0xFFFFFFFF
 
-    class _decorated(object):
+    class _decorated:
 
         def __init__(self, pigpio_cb):
             self._fn = pigpio_cb
@@ -34,18 +37,18 @@ def Debounce(threshold=100):
                 tick = args[3]
             else:
                 tick = args[2]
+
             if self.last > tick:
-                delay = max_tick-self.last + tick
+                delay = max_tick - self.last + tick
             else:
                 delay = tick - self.last
+
             if delay > threshold:
                 self._fn(*args, **kwargs)
-                print('call passed by debouncer {} {} {}'
-                      .format(tick, self.last, threshold))
+                logger.debug('call passed by debouncer {} {} {}'.format(tick, self.last, threshold))
                 self.last = tick
             else:
-                print('call filtered out by debouncer {} {} {}'
-                      .format(tick, self.last, threshold))
+                logger.debug('call filtered out by debouncer {} {} {}'.format(tick, self.last, threshold))
 
         def __get__(self, instance, type=None):
             # with is called when an instance of `_decorated` is used as a class
@@ -54,3 +57,19 @@ def Debounce(threshold=100):
             return functools.partial(self, instance)
 
     return _decorated
+
+
+def tick_diff(t1, t2):
+    """
+    Returns the microsecond difference between two ticks.
+
+    t1:= the earlier tick
+    t2:= the later tick
+    ...
+    >>> tick_diff(4294967272, 12)
+    ... 36
+    """
+    diff = t2 - t1
+    if diff < 0:
+        diff += (1 << 32)
+    return diff

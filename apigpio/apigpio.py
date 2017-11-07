@@ -1,11 +1,14 @@
 import asyncio
+import logging
 import socket
 import struct
 import sys
-import functools
+
 from .ctes import *
 
 exceptions = True
+
+logger = logging.getLogger('apigpio')
 
 # pigpio command numbers
 _PI_CMD_MODES = 0
@@ -130,130 +133,131 @@ _PI_CMD_SLRI = 94
 # pigpio error text
 
 _errors = [
-   [PI_INIT_FAILED, "pigpio initialisation failed"],
-   [PI_BAD_USER_GPIO, "gpio not 0-31"],
-   [PI_BAD_GPIO, "gpio not 0-53"],
-   [PI_BAD_MODE, "mode not 0-7"],
-   [PI_BAD_LEVEL, "level not 0-1"],
-   [PI_BAD_PUD, "pud not 0-2"],
-   [PI_BAD_PULSEWIDTH, "pulsewidth not 0 or 500-2500"],
-   [PI_BAD_DUTYCYCLE, "dutycycle not 0-range (default 255)"],
-   [PI_BAD_TIMER, "timer not 0-9"],
-   [PI_BAD_MS, "ms not 10-60000"],
-   [PI_BAD_TIMETYPE, "timetype not 0-1"],
-   [PI_BAD_SECONDS, "seconds < 0"],
-   [PI_BAD_MICROS, "micros not 0-999999"],
-   [PI_TIMER_FAILED, "gpioSetTimerFunc failed"],
-   [PI_BAD_WDOG_TIMEOUT, "timeout not 0-60000"],
-   [PI_NO_ALERT_FUNC, "DEPRECATED"],
-   [PI_BAD_CLK_PERIPH, "clock peripheral not 0-1"],
-   [PI_BAD_CLK_SOURCE, "DEPRECATED"],
-   [PI_BAD_CLK_MICROS, "clock micros not 1, 2, 4, 5, 8, or 10"],
-   [PI_BAD_BUF_MILLIS, "buf millis not 100-10000"],
-   [PI_BAD_DUTYRANGE, "dutycycle range not 25-40000"],
-   [PI_BAD_SIGNUM, "signum not 0-63"],
-   [PI_BAD_PATHNAME, "can't open pathname"],
-   [PI_NO_HANDLE, "no handle available"],
-   [PI_BAD_HANDLE, "unknown handle"],
-   [PI_BAD_IF_FLAGS, "ifFlags > 3"],
-   [PI_BAD_CHANNEL, "DMA channel not 0-14"],
-   [PI_BAD_SOCKET_PORT, "socket port not 1024-30000"],
-   [PI_BAD_FIFO_COMMAND, "unknown fifo command"],
-   [PI_BAD_SECO_CHANNEL, "DMA secondary channel not 0-6"],
-   [PI_NOT_INITIALISED, "function called before gpioInitialise"],
-   [PI_INITIALISED, "function called after gpioInitialise"],
-   [PI_BAD_WAVE_MODE, "waveform mode not 0-1"],
-   [PI_BAD_CFG_INTERNAL, "bad parameter in gpioCfgInternals call"],
-   [PI_BAD_WAVE_BAUD, "baud rate not 50-250000(RX)/1000000(TX)"],
-   [PI_TOO_MANY_PULSES, "waveform has too many pulses"],
-   [PI_TOO_MANY_CHARS, "waveform has too many chars"],
-   [PI_NOT_SERIAL_GPIO, "no bit bang serial read in progress on gpio"],
-   [PI_NOT_PERMITTED, "no permission to update gpio"],
-   [PI_SOME_PERMITTED, "no permission to update one or more gpios"],
-   [PI_BAD_WVSC_COMMND, "bad WVSC subcommand"],
-   [PI_BAD_WVSM_COMMND, "bad WVSM subcommand"],
-   [PI_BAD_WVSP_COMMND, "bad WVSP subcommand"],
-   [PI_BAD_PULSELEN, "trigger pulse length not 1-100"],
-   [PI_BAD_SCRIPT, "invalid script"],
-   [PI_BAD_SCRIPT_ID, "unknown script id"],
-   [PI_BAD_SER_OFFSET, "add serial data offset > 30 minute"],
-   [PI_GPIO_IN_USE, "gpio already in use"],
-   [PI_BAD_SERIAL_COUNT, "must read at least a byte at a time"],
-   [PI_BAD_PARAM_NUM, "script parameter id not 0-9"],
-   [PI_DUP_TAG, "script has duplicate tag"],
-   [PI_TOO_MANY_TAGS, "script has too many tags"],
-   [PI_BAD_SCRIPT_CMD, "illegal script command"],
-   [PI_BAD_VAR_NUM, "script variable id not 0-149"],
-   [PI_NO_SCRIPT_ROOM, "no more room for scripts"],
-   [PI_NO_MEMORY, "can't allocate temporary memory"],
-   [PI_SOCK_READ_FAILED, "socket read failed"],
-   [PI_SOCK_WRIT_FAILED, "socket write failed"],
-   [PI_TOO_MANY_PARAM, "too many script parameters (> 10)"],
-   [PI_NOT_HALTED, "script already running or failed"],
-   [PI_BAD_TAG, "script has unresolved tag"],
-   [PI_BAD_MICS_DELAY, "bad MICS delay (too large)"],
-   [PI_BAD_MILS_DELAY, "bad MILS delay (too large)"],
-   [PI_BAD_WAVE_ID, "non existent wave id"],
-   [PI_TOO_MANY_CBS, "No more CBs for waveform"],
-   [PI_TOO_MANY_OOL, "No more OOL for waveform"],
-   [PI_EMPTY_WAVEFORM, "attempt to create an empty waveform"],
-   [PI_NO_WAVEFORM_ID, "No more waveform ids"],
-   [PI_I2C_OPEN_FAILED, "can't open I2C device"],
-   [PI_SER_OPEN_FAILED, "can't open serial device"],
-   [PI_SPI_OPEN_FAILED, "can't open SPI device"],
-   [PI_BAD_I2C_BUS, "bad I2C bus"],
-   [PI_BAD_I2C_ADDR, "bad I2C address"],
-   [PI_BAD_SPI_CHANNEL, "bad SPI channel"],
-   [PI_BAD_FLAGS, "bad i2c/spi/ser open flags"],
-   [PI_BAD_SPI_SPEED, "bad SPI speed"],
-   [PI_BAD_SER_DEVICE, "bad serial device name"],
-   [PI_BAD_SER_SPEED, "bad serial baud rate"],
-   [PI_BAD_PARAM, "bad i2c/spi/ser parameter"],
-   [PI_I2C_WRITE_FAILED, "I2C write failed"],
-   [PI_I2C_READ_FAILED, "I2C read failed"],
-   [PI_BAD_SPI_COUNT, "bad SPI count"],
-   [PI_SER_WRITE_FAILED, "ser write failed"],
-   [PI_SER_READ_FAILED, "ser read failed"],
-   [PI_SER_READ_NO_DATA, "ser read no data available"],
-   [PI_UNKNOWN_COMMAND, "unknown command"],
-   [PI_SPI_XFER_FAILED, "SPI xfer/read/write failed"],
-   [PI_BAD_POINTER, "bad (NULL) pointer"],
-   [PI_NO_AUX_SPI, "need a A+/B+/Pi2 for auxiliary SPI"],
-   [PI_NOT_PWM_GPIO, "gpio is not in use for PWM"],
-   [PI_NOT_SERVO_GPIO, "gpio is not in use for servo pulses"],
-   [PI_NOT_HCLK_GPIO, "gpio has no hardware clock"],
-   [PI_NOT_HPWM_GPIO, "gpio has no hardware PWM"],
-   [PI_BAD_HPWM_FREQ, "hardware PWM frequency not 1-125M"],
-   [PI_BAD_HPWM_DUTY, "hardware PWM dutycycle not 0-1M"],
-   [PI_BAD_HCLK_FREQ, "hardware clock frequency not 4689-250M"],
-   [PI_BAD_HCLK_PASS, "need password to use hardware clock 1"],
-   [PI_HPWM_ILLEGAL, "illegal, PWM in use for main clock"],
-   [PI_BAD_DATABITS, "serial data bits not 1-32"],
-   [PI_BAD_STOPBITS, "serial (half) stop bits not 2-8"],
-   [PI_MSG_TOOBIG, "socket/pipe message too big"],
-   [PI_BAD_MALLOC_MODE, "bad memory allocation mode"],
-   [PI_TOO_MANY_SEGS, "too many I2C transaction segments"],
-   [PI_BAD_I2C_SEG, "an I2C transaction segment failed"],
-   [PI_BAD_SMBUS_CMD, "SMBus command not supported"],
-   [PI_NOT_I2C_GPIO, "no bit bang I2C in progress on gpio"],
-   [PI_BAD_I2C_WLEN, "bad I2C write length"],
-   [PI_BAD_I2C_RLEN, "bad I2C read length"],
-   [PI_BAD_I2C_CMD, "bad I2C command"],
-   [PI_BAD_I2C_BAUD, "bad I2C baud rate, not 50-500k"],
-   [PI_CHAIN_LOOP_CNT, "bad chain loop count"],
-   [PI_BAD_CHAIN_LOOP, "empty chain loop"],
-   [PI_CHAIN_COUNTER, "too many chain counters"],
-   [PI_BAD_CHAIN_CMD, "bad chain command"],
-   [PI_BAD_CHAIN_DELAY, "bad chain delay micros"],
-   [PI_CHAIN_NESTING, "chain counters nested too deeply"],
-   [PI_CHAIN_TOO_BIG, "chain is too long"],
-   [PI_DEPRECATED, "deprecated function removed"],
-   [PI_BAD_SER_INVERT, "bit bang serial invert not 0 or 1"],
+    [PI_INIT_FAILED, "pigpio initialisation failed"],
+    [PI_BAD_USER_GPIO, "gpio not 0-31"],
+    [PI_BAD_GPIO, "gpio not 0-53"],
+    [PI_BAD_MODE, "mode not 0-7"],
+    [PI_BAD_LEVEL, "level not 0-1"],
+    [PI_BAD_PUD, "pud not 0-2"],
+    [PI_BAD_PULSEWIDTH, "pulsewidth not 0 or 500-2500"],
+    [PI_BAD_DUTYCYCLE, "dutycycle not 0-range (default 255)"],
+    [PI_BAD_TIMER, "timer not 0-9"],
+    [PI_BAD_MS, "ms not 10-60000"],
+    [PI_BAD_TIMETYPE, "timetype not 0-1"],
+    [PI_BAD_SECONDS, "seconds < 0"],
+    [PI_BAD_MICROS, "micros not 0-999999"],
+    [PI_TIMER_FAILED, "gpioSetTimerFunc failed"],
+    [PI_BAD_WDOG_TIMEOUT, "timeout not 0-60000"],
+    [PI_NO_ALERT_FUNC, "DEPRECATED"],
+    [PI_BAD_CLK_PERIPH, "clock peripheral not 0-1"],
+    [PI_BAD_CLK_SOURCE, "DEPRECATED"],
+    [PI_BAD_CLK_MICROS, "clock micros not 1, 2, 4, 5, 8, or 10"],
+    [PI_BAD_BUF_MILLIS, "buf millis not 100-10000"],
+    [PI_BAD_DUTYRANGE, "dutycycle range not 25-40000"],
+    [PI_BAD_SIGNUM, "signum not 0-63"],
+    [PI_BAD_PATHNAME, "can't open pathname"],
+    [PI_NO_HANDLE, "no handle available"],
+    [PI_BAD_HANDLE, "unknown handle"],
+    [PI_BAD_IF_FLAGS, "ifFlags > 3"],
+    [PI_BAD_CHANNEL, "DMA channel not 0-14"],
+    [PI_BAD_SOCKET_PORT, "socket port not 1024-30000"],
+    [PI_BAD_FIFO_COMMAND, "unknown fifo command"],
+    [PI_BAD_SECO_CHANNEL, "DMA secondary channel not 0-6"],
+    [PI_NOT_INITIALISED, "function called before gpioInitialise"],
+    [PI_INITIALISED, "function called after gpioInitialise"],
+    [PI_BAD_WAVE_MODE, "waveform mode not 0-1"],
+    [PI_BAD_CFG_INTERNAL, "bad parameter in gpioCfgInternals call"],
+    [PI_BAD_WAVE_BAUD, "baud rate not 50-250000(RX)/1000000(TX)"],
+    [PI_TOO_MANY_PULSES, "waveform has too many pulses"],
+    [PI_TOO_MANY_CHARS, "waveform has too many chars"],
+    [PI_NOT_SERIAL_GPIO, "no bit bang serial read in progress on gpio"],
+    [PI_NOT_PERMITTED, "no permission to update gpio"],
+    [PI_SOME_PERMITTED, "no permission to update one or more gpios"],
+    [PI_BAD_WVSC_COMMND, "bad WVSC subcommand"],
+    [PI_BAD_WVSM_COMMND, "bad WVSM subcommand"],
+    [PI_BAD_WVSP_COMMND, "bad WVSP subcommand"],
+    [PI_BAD_PULSELEN, "trigger pulse length not 1-100"],
+    [PI_BAD_SCRIPT, "invalid script"],
+    [PI_BAD_SCRIPT_ID, "unknown script id"],
+    [PI_BAD_SER_OFFSET, "add serial data offset > 30 minute"],
+    [PI_GPIO_IN_USE, "gpio already in use"],
+    [PI_BAD_SERIAL_COUNT, "must read at least a byte at a time"],
+    [PI_BAD_PARAM_NUM, "script parameter id not 0-9"],
+    [PI_DUP_TAG, "script has duplicate tag"],
+    [PI_TOO_MANY_TAGS, "script has too many tags"],
+    [PI_BAD_SCRIPT_CMD, "illegal script command"],
+    [PI_BAD_VAR_NUM, "script variable id not 0-149"],
+    [PI_NO_SCRIPT_ROOM, "no more room for scripts"],
+    [PI_NO_MEMORY, "can't allocate temporary memory"],
+    [PI_SOCK_READ_FAILED, "socket read failed"],
+    [PI_SOCK_WRIT_FAILED, "socket write failed"],
+    [PI_TOO_MANY_PARAM, "too many script parameters (> 10)"],
+    [PI_NOT_HALTED, "script already running or failed"],
+    [PI_BAD_TAG, "script has unresolved tag"],
+    [PI_BAD_MICS_DELAY, "bad MICS delay (too large)"],
+    [PI_BAD_MILS_DELAY, "bad MILS delay (too large)"],
+    [PI_BAD_WAVE_ID, "non existent wave id"],
+    [PI_TOO_MANY_CBS, "No more CBs for waveform"],
+    [PI_TOO_MANY_OOL, "No more OOL for waveform"],
+    [PI_EMPTY_WAVEFORM, "attempt to create an empty waveform"],
+    [PI_NO_WAVEFORM_ID, "No more waveform ids"],
+    [PI_I2C_OPEN_FAILED, "can't open I2C device"],
+    [PI_SER_OPEN_FAILED, "can't open serial device"],
+    [PI_SPI_OPEN_FAILED, "can't open SPI device"],
+    [PI_BAD_I2C_BUS, "bad I2C bus"],
+    [PI_BAD_I2C_ADDR, "bad I2C address"],
+    [PI_BAD_SPI_CHANNEL, "bad SPI channel"],
+    [PI_BAD_FLAGS, "bad i2c/spi/ser open flags"],
+    [PI_BAD_SPI_SPEED, "bad SPI speed"],
+    [PI_BAD_SER_DEVICE, "bad serial device name"],
+    [PI_BAD_SER_SPEED, "bad serial baud rate"],
+    [PI_BAD_PARAM, "bad i2c/spi/ser parameter"],
+    [PI_I2C_WRITE_FAILED, "I2C write failed"],
+    [PI_I2C_READ_FAILED, "I2C read failed"],
+    [PI_BAD_SPI_COUNT, "bad SPI count"],
+    [PI_SER_WRITE_FAILED, "ser write failed"],
+    [PI_SER_READ_FAILED, "ser read failed"],
+    [PI_SER_READ_NO_DATA, "ser read no data available"],
+    [PI_UNKNOWN_COMMAND, "unknown command"],
+    [PI_SPI_XFER_FAILED, "SPI xfer/read/write failed"],
+    [PI_BAD_POINTER, "bad (NULL) pointer"],
+    [PI_NO_AUX_SPI, "need a A+/B+/Pi2 for auxiliary SPI"],
+    [PI_NOT_PWM_GPIO, "gpio is not in use for PWM"],
+    [PI_NOT_SERVO_GPIO, "gpio is not in use for servo pulses"],
+    [PI_NOT_HCLK_GPIO, "gpio has no hardware clock"],
+    [PI_NOT_HPWM_GPIO, "gpio has no hardware PWM"],
+    [PI_BAD_HPWM_FREQ, "hardware PWM frequency not 1-125M"],
+    [PI_BAD_HPWM_DUTY, "hardware PWM dutycycle not 0-1M"],
+    [PI_BAD_HCLK_FREQ, "hardware clock frequency not 4689-250M"],
+    [PI_BAD_HCLK_PASS, "need password to use hardware clock 1"],
+    [PI_HPWM_ILLEGAL, "illegal, PWM in use for main clock"],
+    [PI_BAD_DATABITS, "serial data bits not 1-32"],
+    [PI_BAD_STOPBITS, "serial (half) stop bits not 2-8"],
+    [PI_MSG_TOOBIG, "socket/pipe message too big"],
+    [PI_BAD_MALLOC_MODE, "bad memory allocation mode"],
+    [PI_TOO_MANY_SEGS, "too many I2C transaction segments"],
+    [PI_BAD_I2C_SEG, "an I2C transaction segment failed"],
+    [PI_BAD_SMBUS_CMD, "SMBus command not supported"],
+    [PI_NOT_I2C_GPIO, "no bit bang I2C in progress on gpio"],
+    [PI_BAD_I2C_WLEN, "bad I2C write length"],
+    [PI_BAD_I2C_RLEN, "bad I2C read length"],
+    [PI_BAD_I2C_CMD, "bad I2C command"],
+    [PI_BAD_I2C_BAUD, "bad I2C baud rate, not 50-500k"],
+    [PI_CHAIN_LOOP_CNT, "bad chain loop count"],
+    [PI_BAD_CHAIN_LOOP, "empty chain loop"],
+    [PI_CHAIN_COUNTER, "too many chain counters"],
+    [PI_BAD_CHAIN_CMD, "bad chain command"],
+    [PI_BAD_CHAIN_DELAY, "bad chain delay micros"],
+    [PI_CHAIN_NESTING, "chain counters nested too deeply"],
+    [PI_CHAIN_TOO_BIG, "chain is too long"],
+    [PI_DEPRECATED, "deprecated function removed"],
+    [PI_BAD_SER_INVERT, "bit bang serial invert not 0 or 1"],
 ]
 
 
 class ApigpioError(Exception):
     """pigpio module exception"""
+
     def __init__(self, value):
         self.value = value
 
@@ -268,7 +272,7 @@ def error_text(errnum):
     errnum:= <0, the error number
 
     ...
-    print(pigpio.error_text(-5))
+    logger.debug(pigpio.error_text(-5))
     level not 0-1
     ...
     """
@@ -305,9 +309,9 @@ def u2i(uint32):
     uint32:= an unsigned 32 bit number
 
     ...
-    print(u2i(4294967272))
+    logger.debug(u2i(4294967272))
     -24
-    print(u2i(37))
+    logger.debug(u2i(37))
     37
     ...
     """
@@ -355,7 +359,8 @@ class _callback_ADT:
             try:
                 self._func(*args, **kwargs)
             except Exception as e:
-                print('Exception raised when running callback {}'.format(e))
+                logger.debug('Exception raised when running callback {}'.format(e))
+
         return _f
 
 
@@ -405,7 +410,7 @@ class _callback_handler(object):
         while True:
             MSG_SIZ = 12
             f_recv = self._loop.sock_recv(self.s, MSG_SIZ)
-            done, pending = yield from asyncio.\
+            done, pending = yield from asyncio. \
                 wait([f_recv, self.f_stop],
                      return_when=asyncio.FIRST_COMPLETED)
             if self.f_stop in done:
@@ -415,7 +420,7 @@ class _callback_handler(object):
             # buf = yield from self._loop.sock_recv(self.s, MSG_SIZ)
 
             while len(buf) < MSG_SIZ:
-                yield from self._loop.sock_recv(self.s, MSG_SIZ-len(buf))
+                yield from self._loop.sock_recv(self.s, MSG_SIZ - len(buf))
 
             seq, flags, tick, level = (struct.unpack('HHII', buf))
             if flags == 0:
@@ -430,19 +435,19 @@ class _callback_handler(object):
                             cb.func(cb.gpio, new_level, tick)
             else:
                 if flags & NTFY_FLAGS_WDOG:
-                    print('watchdog signal')
+                    logger.debug('watchdog signal')
                     gpio = flags & NTFY_FLAGS_GPIO
                     for cb in self.callbacks:
                         if cb.gpio == gpio:
                             cb.func(cb.gpio, TIMEOUT, tick)
                 if flags & NTFY_FLAGS_ALIVE:
-                    print('keep alive signal')
-                # no event for now
-                # elif flags & NTFY_FLAGS_EVENT:
-                #    event = flags & NTFY_FLAGS_GPIO
-                #    for cb in self.events:
-                #        if cb.event == event:
-                #            cb.func(event, tick)
+                    logger.debug('keep alive signal')
+                    # no event for now
+                    # elif flags & NTFY_FLAGS_EVENT:
+                    #    event = flags & NTFY_FLAGS_GPIO
+                    #    for cb in self.events:
+                    #        if cb.event == event:
+                    #            cb.func(event, tick)
         self.s.close()
         self.f_stopped.set_result(True)
 
@@ -456,7 +461,7 @@ class _callback_handler(object):
                                                self.monitor)
 
     @asyncio.coroutine
-    def _pigpio_aio_command(self, cmd,  p1, p2,):
+    def _pigpio_aio_command(self, cmd, p1, p2, ):
         # FIXME: duplication with pi._pigpio_aio_command
         data = struct.pack('IIII', cmd, p1, p2, 0)
         self._loop.sock_sendall(self.s, data)
@@ -498,10 +503,28 @@ class Callback:
         return self.count
 
 
-class Pi(object):
+class Pi:
+    """
+    Usage:
+    >>> address = ('192.168.1.10', 8888)
+    >>> async with Pi(address) as pi:
+    ....    await pi.get_version()
+    """
+
+    def __init__(self, address, loop=None):
+        """
+        :param address: a pair (address, port), the address must be already
+        """
+        self.address = address
+        if loop is None:
+            loop = asyncio.get_event_loop()
+        self._loop = loop
+        self.s = None
+        self._notify = _callback_handler(self)
+        self._lock = asyncio.Lock()
 
     @asyncio.coroutine
-    def _pigpio_aio_command(self, cmd,  p1, p2,):
+    def _pigpio_aio_command(self, cmd, p1=0, p2=0):
         """
         Runs a pigpio socket command.
 
@@ -512,7 +535,7 @@ class Pi(object):
         """
         with (yield from self._lock):
             data = struct.pack('IIII', cmd, p1, p2, 0)
-            self._loop.sock_sendall(self.s, data)
+            yield from self._loop.sock_sendall(self.s, data)
             response = yield from self._loop.sock_recv(self.s, 16)
             _, res = struct.unpack('12sI', response)
             return res
@@ -536,16 +559,15 @@ class Pi(object):
                     ext.extend(_b(x))
                 else:
                     ext.extend(x)
-            self._loop.sock_sendall(self.s, ext)
+            yield from self._loop.sock_sendall(self.s, ext)
             response = yield from self._loop.sock_recv(self.s, 16)
             _, res = struct.unpack('12sI', response)
             return res
 
     @asyncio.coroutine
-    def connect(self, address):
+    def connect(self):
         """
         Connect to a remote or local gpiod daemon.
-        :param address: a pair (address, port), the address must be already
         resolved (for example an ip address)
         :return:
         """
@@ -554,25 +576,31 @@ class Pi(object):
         # Disable the Nagle algorithm.
         self.s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
-        yield from self._loop.sock_connect(self.s, address)
+        yield from self._loop.sock_connect(self.s, self.address)
 
-        yield from self._notify._connect(address)
+        yield from self._notify._connect(self.address)
 
     @asyncio.coroutine
     def stop(self):
         """
-
         :return:
         """
-        print('closing notifier')
+        logger.debug('closing notifier')
         yield from self._notify.close()
-        print('closing socket')
+        logger.debug('closing socket')
         self.s.close()
+
+    async def __aenter__(self):
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.stop()
 
     @asyncio.coroutine
     def get_version(self):
         res = yield from self._pigpio_aio_command(_PI_CMD_PIGPV)
-        print('version: {}'.format(res))
+        return res
 
     @asyncio.coroutine
     def get_pigpio_version(self):
@@ -583,7 +611,8 @@ class Pi(object):
         v = pi.get_pigpio_version()
         ...
         """
-        res = yield from self._pigpio_aio_command(_PI_CMD_PIGPV, 0, 0)
+        res = yield from self._pigpio_aio_command(_PI_CMD_PIGPV)
+        return res
 
     @asyncio.coroutine
     def store_script(self, script):
@@ -676,7 +705,7 @@ class Pi(object):
             # data = self._rxbuf(bytes)
             data = yield from self._loop.sock_recv(self.s, bytes)
             while len(data) < bytes:
-                b = yield from self._loop.sock_recv(self.s, bytes-len(data))
+                b = yield from self._loop.sock_recv(self.s, bytes - len(data))
                 data.extend(b)
 
             pars = struct.unpack('11i', _str(data))
@@ -724,7 +753,7 @@ class Pi(object):
         gpio is high.  Gpio n has bit value (1<<n).
 
         ...
-        print(bin(pi.read_bank_1()))
+        logger.debug(bin(pi.read_bank_1()))
         0b10010100000011100100001001111
         ...
         """
@@ -820,7 +849,7 @@ class Pi(object):
         . .
 
         ...
-        print(pi.get_mode(0))
+        logger.debug(pi.get_mode(0))
         4
         ...
         """
@@ -842,15 +871,33 @@ class Pi(object):
         pi.set_mode(17, pigpio.OUTPUT)
 
         pi.write(17,0)
-        print(pi.read(17))
+        logger.debug(pi.read(17))
         0
 
         pi.write(17,1)
-        print(pi.read(17))
+        logger.debug(pi.read(17))
         1
         ...
         """
         res = yield from self._pigpio_aio_command(_PI_CMD_WRITE, gpio, level)
+        return _u2i(res)
+
+    @asyncio.coroutine
+    def read(self, gpio):
+        """
+        Returns the GPIO level.
+        gpio:= 0-53.
+        ...
+        yield from pi.set_mode(23, pigpio.INPUT)
+        yield from pi.set_pull_up_down(23, pigpio.PUD_DOWN)
+        logger.debug(yield from pi.read(23))
+        0
+        yield from pi.set_pull_up_down(23, pigpio.PUD_UP)
+        logger.debug(yield from pi.read(23))
+        1
+        ...
+        """
+        res = yield from self._pigpio_aio_command(_PI_CMD_READ, gpio, 0)
         return _u2i(res)
 
     @asyncio.coroutine
@@ -978,7 +1025,7 @@ class Pi(object):
 
         ...
         def cbf(gpio, level, tick):
-         print(gpio, level, tick)
+         logger.debug(gpio, level, tick)
 
         cb1 = pi.callback(22, pigpio.EITHER_EDGE, cbf)
 
@@ -986,7 +1033,7 @@ class Pi(object):
 
         cb3 = pi.callback(17)
 
-        print(cb3.tally())
+        logger.debug(cb3.tally())
 
         cb1.cancel() # To cancel callback cb1.
         ...
@@ -1020,11 +1067,3 @@ class Pi(object):
         """
         res = yield from self._pigpio_aio_command(_PI_CMD_SERVO, user_gpio, int(pulsewidth))
         return _u2i(res)
-
-    def __init__(self, loop=None):
-        if loop is None:
-            loop = asyncio.get_event_loop()
-        self._loop = loop
-        self.s = None
-        self._notify = _callback_handler(self)
-        self._lock = asyncio.Lock()

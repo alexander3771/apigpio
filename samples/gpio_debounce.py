@@ -3,7 +3,7 @@ import apigpio
 import functools
 
 # This sample demonstrates both writing to gpio and listening to gpio changes.
-# It also shows the Debounce decorator, which might be useful when registering
+# It also shows the debounce decorator, which might be useful when registering
 # a callback for a gpio connected to a button, for example.
 
 BT_GPIO = 18
@@ -45,10 +45,10 @@ class Blinker(object):
             self.blink = False
 
 # The DeBounce can simply be applied to your callback.
-# Optionnally, the threshold can be specified in milliseconds : @Debounce(200)
+# Optionnally, the threshold can be specified in milliseconds : @debounce(200)
 
 
-@apigpio.Debounce()
+@apigpio.debounce()
 def on_bt(gpio, level, tick, blinker=None):
     print('on_input {} {} {}'.format(gpio, level, tick))
     blinker.toggle()
