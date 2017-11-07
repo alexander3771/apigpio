@@ -901,6 +901,32 @@ class Pi:
         return _u2i(res)
 
     @asyncio.coroutine
+    def set_watchdog(self, user_gpio, wdog_timeout):
+        """
+        Sets a watchdog timeout for a GPIO.
+           user_gpio:= 0-31.
+        wdog_timeout:= 0-60000.
+
+        The watchdog is nominally in milliseconds.
+
+        Only one watchdog may be registered per GPIO.
+
+        The watchdog may be cancelled by setting timeout to 0.
+
+        Once a watchdog has been started callbacks for the GPIO
+        will be triggered every timeout interval after the last
+        GPIO activity.
+
+        The callback will receive the special level TIMEOUT.
+        ...
+        yield from pi.set_watchdog(23, 1000) # 1000 ms watchdog on GPIO 23
+        yield from pi.set_watchdog(23, 0)    # cancel watchdog on GPIO 23
+        ...
+        """
+        res = yield from self._pigpio_aio_command(_PI_CMD_WDOG, user_gpio, int(wdog_timeout))
+        return _u2i(res)
+
+    @asyncio.coroutine
     def gpio_trigger(self, user_gpio, pulse_len=10, level=1):
         """
         Send a trigger pulse to a GPIO.  The GPIO is set to
