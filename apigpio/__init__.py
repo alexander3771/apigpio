@@ -1,3 +1,3 @@
 from .ctes import *
 from .apigpio import Pi
-from .utils import debounce
+from .utils import debounce, tick_diff

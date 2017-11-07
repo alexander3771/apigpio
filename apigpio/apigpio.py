@@ -461,6 +461,19 @@ class _callback_handler(object):
                                                self.monitor)
 
     @asyncio.coroutine
+    def remove(self, cb):
+        """Removes a callback."""
+        if cb in self.callbacks:
+            self.callbacks.remove(cb)
+            new_monitor = 0
+            for c in self.callbacks:
+                new_monitor |= c.bit
+            if new_monitor != self.monitor:
+                self.monitor = new_monitor
+                yield from self.pi._pigpio_aio_command(
+                    _PI_CMD_NB, self.handle, self.monitor)
+
+    @asyncio.coroutine
     def _pigpio_aio_command(self, cmd, p1, p2, ):
         # FIXME: duplication with pi._pigpio_aio_command
         data = struct.pack('IIII', cmd, p1, p2, 0)
