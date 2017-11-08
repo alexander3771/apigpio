@@ -474,7 +474,7 @@ class _callback_handler(object):
                     _PI_CMD_NB, self.handle, self.monitor)
 
     @asyncio.coroutine
-    def _pigpio_aio_command(self, cmd, p1, p2, ):
+    def _pigpio_aio_command(self, cmd, p1, p2):
         # FIXME: duplication with pi._pigpio_aio_command
         data = struct.pack('IIII', cmd, p1, p2, 0)
         self._loop.sock_sendall(self.s, data)
@@ -497,9 +497,10 @@ class Callback:
         self.callb = _callback_ADT(user_gpio, edge, func)
         # FIXME yield from self._notify.append(self.callb)
 
+    @asyncio.coroutine
     def cancel(self):
         """Cancels a callback by removing it from the notification thread."""
-        self._notify.remove(self.callb)
+        yield from self._notify.remove(self.callb)
 
     def _tally(self, user_gpio, level, tick):
         """Increment the callback called count."""
@@ -581,8 +582,6 @@ class Pi:
     def connect(self):
         """
         Connect to a remote or local gpiod daemon.
-        resolved (for example an ip address)
-        :return:
         """
         self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.s.setblocking(False)
@@ -595,9 +594,6 @@ class Pi:
 
     @asyncio.coroutine
     def stop(self):
-        """
-        :return:
-        """
         logger.debug('closing notifier')
         yield from self._notify.close()
         logger.debug('closing socket')
@@ -903,10 +899,10 @@ class Pi:
         ...
         yield from pi.set_mode(23, pigpio.INPUT)
         yield from pi.set_pull_up_down(23, pigpio.PUD_DOWN)
-        logger.debug(yield from pi.read(23))
+        print(yield from pi.read(23))
         0
         yield from pi.set_pull_up_down(23, pigpio.PUD_UP)
-        logger.debug(yield from pi.read(23))
+        print(yield from pi.read(23))
         1
         ...
         """
