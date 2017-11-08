@@ -25,7 +25,7 @@ class DHT11:
     >>> address = ('192.168.1.10', 8888)
     >>> gpio = 4
     >>> async with apigpio.Pi(address) as pi:
-    ....    async with DHT11(pi, gpio) as sensor:  # 4 is the data GPIO pin connected to your sensor
+    ....    async with DHT11(pi, gpio) as sensor:
     ....        async for result in sensor:
     ....            if result.is_valid():
     ....                print(result)
@@ -95,7 +95,7 @@ class DHT11:
             self.checksum = (self.checksum << 1) + val
             if self._bit == 39:
                 # 40th bit received
-                loop.create_task(self._pi.set_watchdog(self._gpio, 0))
+                self._loop.create_task(self._pi.set_watchdog(self._gpio, 0))
                 total = self.humidity + self.temperature
                 # is checksum ok ?
                 if not (total & 255) == self.checksum:
@@ -131,7 +131,7 @@ class DHT11:
         """
         Handle Either signal.
         """
-        loop.create_task(self._pi.set_watchdog(self._gpio, 0))
+        self._loop.create_task(self._pi.set_watchdog(self._gpio, 0))
 
     async def read(self):
         """
