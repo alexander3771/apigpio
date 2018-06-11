@@ -10,6 +10,8 @@ exceptions = True
 
 logger = logging.getLogger('apigpio')
 
+PY_35 = sys.version_info >= (3, 5)
+
 # pigpio command numbers
 _PI_CMD_MODES = 0
 _PI_CMD_MODEG = 1
@@ -521,8 +523,15 @@ class Pi:
     """
     Usage:
     >>> address = ('192.168.1.10', 8888)
-    >>> async with Pi(address) as pi:
-    ....    await pi.get_version()
+    >>> async with Pi(address) as pi:  # python3.5+ version
+    ...     await pi.get_version()
+    >>>
+    >>> pi = Pi(address)  # python3.4 version
+    >>> try:
+    ...     yield from pi.connect()
+    ...     yield from pi.get_version()
+    ... finally:
+    ...     yield from pi.stop()
     """
 
     def __init__(self, address, loop=None):
@@ -599,12 +608,13 @@ class Pi:
         logger.debug('closing socket')
         self.s.close()
 
-    async def __aenter__(self):
-        await self.connect()
-        return self
+    if PY_35:
+        async def __aenter__(self):
+            await self.connect()
+            return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.stop()
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            await self.stop()
 
     @asyncio.coroutine
     def get_version(self):
